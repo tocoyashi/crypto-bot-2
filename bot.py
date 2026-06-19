@@ -23,7 +23,7 @@ SYMBOLS = [
     "AAVE/USDT", "GRT/USDT", "PEPE/USDT", "QNT/USDT", "FET/USDT"
 ]
 
-DEFAULT_IMAGE = "https://t.me/PYTHON_SIGNALS_BS/38"
+DEFAULT_IMAGE = "https://t.me/GG_Shot_Leak/116880"
 
 def get_decimals(price):
     if price > 100:
