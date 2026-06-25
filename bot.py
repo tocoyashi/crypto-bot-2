@@ -14,15 +14,15 @@ CHANNEL_ID = os.environ.get("CHANNEL_ID")
 
 TIMEFRAME = "15m"
 
-# ========== 38 عملة ==========
+# ========== 38 عملة (حذفنا 12) ==========
 SYMBOLS = [
-    "BTC/USDT", "ADA/USDT", "DOGE/USDT", "TRX/USDT", "AVAX/USDT", 
-    "LINK/USDT", "DOT/USDT", "POL/USDT", "SHIB/USDT", "LTC/USDT", 
-    "UNI/USDT", "ATOM/USDT", "XLM/USDT", "NEAR/USDT", "APT/USDT", 
-    "SUI/USDT", "ARB/USDT", "OP/USDT", "INJ/USDT", "AAVE/USDT", 
-    "GRT/USDT", "PEPE/USDT", "FET/USDT", "FLOKI/USDT", "WIF/USDT", 
-    "SEI/USDT", "ICP/USDT", "WLD/USDT", "IMX/USDT", "RENDER/USDT", 
-    "JUP/USDT", "STRK/USDT", "BONK/USDT", "ONDO/USDT", "PYTH/USDT", 
+    "BTC/USDT", "ADA/USDT", "DOGE/USDT", "TRX/USDT", "AVAX/USDT",
+    "LINK/USDT", "DOT/USDT", "POL/USDT", "SHIB/USDT", "LTC/USDT",
+    "UNI/USDT", "ATOM/USDT", "XLM/USDT", "NEAR/USDT", "APT/USDT",
+    "SUI/USDT", "ARB/USDT", "OP/USDT", "INJ/USDT", "AAVE/USDT",
+    "GRT/USDT", "PEPE/USDT", "FET/USDT", "FLOKI/USDT", "WIF/USDT",
+    "SEI/USDT", "ICP/USDT", "WLD/USDT", "IMX/USDT", "RENDER/USDT",
+    "JUP/USDT", "STRK/USDT", "BONK/USDT", "ONDO/USDT", "PYTH/USDT",
     "ENA/USDT", "ORDI/USDT", "KAS/USDT"
 ]
 
@@ -39,17 +39,22 @@ def get_next_signal_id():
             current_id = int(file.read().strip())
     except (FileNotFoundError, ValueError):
         current_id = 0
+    
     next_id = current_id + 1
+    
     try:
         with open(filename, "w") as file:
             file.write(str(next_id))
     except Exception as e:
         print(f"Error saving signal ID: {e}")
+        
     return f"{next_id:03d}"
 
+# ========== تحليل بدون أرقام ==========
 def generate_summary(direction, strategy, df):
     rsi_val = round(ta.momentum.rsi(df['close'], window=14).iloc[-1], 1)
     
+    # الهيكل السعري (بدون أرقام)
     if df['close'].iloc[-1] > df['close'].ewm(span=50, adjust=False).mean().iloc[-1]:
         structure_txt = random.choice([
             "The intraday chart maintains a bullish posture with price holding above dynamic support.",
@@ -63,6 +68,7 @@ def generate_summary(direction, strategy, df):
             "Price action on the fifteen-minute frame reflects steady bearish commitment."
         ])
 
+    # الحدث المُفَعِّل (بدون أرقام)
     if "EMA" in strategy:
         if direction == "LONG":
             action_txt = random.choice([
@@ -89,7 +95,7 @@ def generate_summary(direction, strategy, df):
                 "A fresh bearish cross on the momentum gauge suggests accelerating downside.",
                 "Selling pressure intensified as the histogram flipped into negative territory."
             ])
-    else:
+    else:  # BB
         if direction == "LONG":
             action_txt = random.choice([
                 "An expansion beyond the upper volatility band signals a breakout impulse.",
@@ -103,6 +109,7 @@ def generate_summary(direction, strategy, df):
                 "The squeeze resolved to the downside with aggressive momentum."
             ])
 
+    # الزخم (وصف فقط، بدون ذكر الرقم)
     if direction == "LONG":
         if rsi_val < 70:
             rsi_txt = random.choice([
@@ -130,6 +137,7 @@ def generate_summary(direction, strategy, df):
                 "Sellers dominate with the momentum gauge deep in the lower extreme."
             ])
 
+    # مستويات المخاطر (بدون أرقام!)
     if direction == "LONG":
         levels_txt = random.choice([
             "Invalidation lies below the entry zone; target a quick sweep to the first objective and extension toward the final target.",
@@ -143,7 +151,8 @@ def generate_summary(direction, strategy, df):
             "Place defensive stops above the setup zone; anticipate swift execution toward the nearest target."
         ])
 
-    return f"📊 {structure_txt} {action_txt} {rsi_txt} {levels_txt}"
+    summary = f"📊 {structure_txt} {action_txt} {rsi_txt} {levels_txt}"
+    return summary
 
 def send_crypto_signal(coin_name, direction, strategy, entry, leverage, tp1, tp2, tp3, tp4, sl, summary_text):
     signal_id = get_next_signal_id()
@@ -161,86 +170,17 @@ def send_crypto_signal(coin_name, direction, strategy, entry, leverage, tp1, tp2
     try:
         response = requests.post(url, json=payload)
         if response.json().get('ok'): 
-            print(f"✅ Signal {signal_id} sent for {coin_name} via {strategy}")
+            print(f"Signal {signal_id} sent for {coin_name} via {strategy}")
         else: 
-            print(f"❌ ERROR for {coin_name}: {response.json().get('description')}")
+            print(f"ERROR for {coin_name}: {response.json().get('description')}")
     except Exception as e: 
-        print(f"❌ Network error: {e}")
-
-# ========== تشخيص محسّن ==========
-def diagnose_market():
-    """تشخيص حالة السوق ببيانات كافية"""
-    print("\n" + "="*60)
-    print("🔍 Market Diagnosis (Last 100 candles)")
-    print("="*60 + "\n")
-    
-    exchange = ccxt.mexc()
-    test_symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "DOGE/USDT", "ADA/USDT"]
-    
-    for symbol in test_symbols:
-        try:
-            # limit=100 للحصول على بيانات صالحة
-            ohlcv = exchange.fetch_ohlcv(symbol, TIMEFRAME, limit=100)
-            df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-            
-            # EMA
-            ema_9 = df['close'].ewm(span=9, adjust=False).mean()
-            ema_21 = df['close'].ewm(span=21, adjust=False).mean()
-            
-            # MACD
-            macd_hist = ta.trend.macd_diff(df['close'])
-            
-            # BB
-            bb = ta.volatility.BollingerBands(close=df['close'], window=20, window_dev=2)
-            
-            # RSI
-            rsi = ta.momentum.rsi(df['close'], window=14)
-            
-            # آخر قيم صالحة
-            last_ema9 = ema_9.iloc[-1]
-            last_ema21 = ema_21.iloc[-1]
-            prev_ema9 = ema_9.iloc[-2]
-            prev_ema21 = ema_21.iloc[-2]
-            
-            last_macd = macd_hist.iloc[-1]
-            prev_macd = macd_hist.iloc[-2]
-            
-            last_bb_upper = bb.bollinger_hband().iloc[-1]
-            last_bb_lower = bb.bollinger_lband().iloc[-1]
-            prev_bb_upper = bb.bollinger_hband().iloc[-2]
-            prev_bb_lower = bb.bollinger_lband().iloc[-2]
-            
-            last_rsi = rsi.iloc[-1]
-            last_price = df['close'].iloc[-1]
-            
-            # فحص الإشارات
-            ema_buy = (prev_ema9 < prev_ema21) and (last_ema9 > last_ema21)
-            ema_sell = (prev_ema9 > prev_ema21) and (last_ema9 < last_ema21)
-            macd_buy = (prev_macd < 0) and (last_macd > 0)
-            macd_sell = (prev_macd > 0) and (last_macd < 0)
-            bb_buy = (df['close'].iloc[-2] <= prev_bb_upper) and (last_price > last_bb_upper)
-            bb_sell = (df['close'].iloc[-2] >= prev_bb_lower) and (last_price < last_bb_lower)
-            
-            print(f"📊 {symbol}:")
-            print(f"   Price: {last_price:.4f} | RSI: {last_rsi:.1f}")
-            print(f"   EMA 9: {last_ema9:.2f} | EMA 21: {last_ema21:.2f}")
-            print(f"   EMA Cross: {'✅ BUY' if ema_buy else '✅ SELL' if ema_sell else '❌ No'}")
-            print(f"   MACD: {last_macd:.6f} | {'✅ BUY' if macd_buy else '✅ SELL' if macd_sell else '❌ No'}")
-            print(f"   BB: Upper={last_bb_upper:.2f} Lower={last_bb_lower:.2f} | {'✅ BUY' if bb_buy else '✅ SELL' if bb_sell else '❌ No'}")
-            print()
-            
-        except Exception as e:
-            print(f"❌ {symbol}: {e}\n")
+        print(f"Network error: {e}")
 
 def analyze_and_trade():
     print("Starting 15M Scalp Scan with Dynamic Leverage & 3 Strategies...")
     exchange = ccxt.mexc()
     
-    signals_found = 0
-    checked = 0
-    
     for symbol in SYMBOLS:
-        checked += 1
         try:
             ohlcv = exchange.fetch_ohlcv(symbol, TIMEFRAME, limit=100)
             df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -274,99 +214,34 @@ def analyze_and_trade():
                 strategy_name = "EMA Cross" if ema_buy else ("MACD Cross" if macd_buy else "BB Breakout")
                 lev = "15" if ema_buy else ("25" if macd_buy else "20")
                 
-                print(f"✅ BUY on {symbol} via {strategy_name} ({lev}x})!")
+                print(f"BUY on {symbol} via {strategy_name} ({lev}x)!")
                 entry = round(current_close, decimals)
+                
+                # Generate summary for Long (بدون أرقام!)
                 summary = generate_summary("LONG", strategy_name, df)
                 
-                send_crypto_signal(symbol, "LONG", strategy_name, entry, lev, 
-                    round(entry * 1.0075, decimals), round(entry * 1.017, decimals), 
-                    round(entry * 1.032, decimals), round(entry * 1.058, decimals), 
-                    round(entry * 0.95, decimals), summary)
+                send_crypto_signal(symbol, "LONG", strategy_name, entry, lev, round(entry * 1.0075, decimals), round(entry * 1.017, decimals), round(entry * 1.032, decimals), round(entry * 1.058, decimals), round(entry * 0.95, decimals), summary)
                 time.sleep(6)
-                signals_found += 1
                 
             # ✨ SHORT Signals
             elif ema_sell or macd_sell or bb_sell:
                 strategy_name = "EMA Cross" if ema_sell else ("MACD Cross" if macd_sell else "BB Breakdown")
                 lev = "15" if ema_sell else ("25" if macd_sell else "20")
                 
-                print(f"✅ SELL on {symbol} via {strategy_name} ({lev}x})!")
+                print(f"SELL on {symbol} via {strategy_name} ({lev}x)!")
                 entry = round(current_close, decimals)
+                
+                # Generate summary for Short (بدون أرقام!)
                 summary = generate_summary("SHORT", strategy_name, df)
                 
-                send_crypto_signal(symbol, "SHORT", strategy_name, entry, lev, 
-                    round(entry * 0.9925, decimals), round(entry * 0.983, decimals), 
-                    round(entry * 0.968, decimals), round(entry * 0.942, decimals), 
-                    round(entry * 1.05, decimals), summary)
+                send_crypto_signal(symbol, "SHORT", strategy_name, entry, lev, round(entry * 0.9925, decimals), round(entry * 0.983, decimals), round(entry * 0.968, decimals), round(entry * 0.942, decimals), round(entry * 1.05, decimals), summary)
                 time.sleep(6)
-                signals_found += 1
+            else:
+                pass
                 
         except Exception as e:
-            print(f"❌ Error {symbol}: {e}")
-    
-    print(f"\n{'='*60}")
-    print(f"📊 Checked: {checked}/38 | Signals: {signals_found}")
-    if signals_found == 0:
-        print("⚠️ No signals found - market may be ranging or quiet")
-    print(f"{'='*60}\n")
-
-# ========== اختبار الاتصال ==========
-def test_connections():
-    print("\n" + "="*60)
-    print("🔍 Testing Connections...")
-    print("="*60 + "\n")
-    
-    print("1. Testing MEXC API...")
-    try:
-        exchange = ccxt.mexc()
-        ticker = exchange.fetch_ticker("BTC/USDT")
-        print(f"   ✅ MEXC Connected!")
-        print(f"   📊 BTC Price: {ticker['last']}")
-    except Exception as e:
-        print(f"   ❌ MEXC Error: {e}")
-        return False
-    
-    print("\n2. Testing Telegram Bot...")
-    try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/getMe"
-        response = requests.get(url, timeout=10)
-        data = response.json()
-        if data.get("ok"):
-            print(f"   ✅ Telegram Connected!")
-            print(f"   🤖 Bot: @{data['result']['username']}")
-        else:
-            print(f"   ❌ Telegram Error")
-            return False
-    except Exception as e:
-        print(f"   ❌ Telegram Error: {e}")
-        return False
-    
-    print("\n3. Testing Channel...")
-    try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChat?chat_id={CHANNEL_ID}"
-        response = requests.get(url, timeout=10)
-        data = response.json()
-        if data.get("ok"):
-            print(f"   ✅ Channel Accessible!")
-            print(f"   📢 {data['result'].get('title', 'Unknown')}")
-        else:
-            print(f"   ❌ Channel Error")
-            return False
-    except Exception as e:
-        print(f"   ❌ Channel Error: {e}")
-        return False
-    
-    print("\n" + "="*60)
-    print("✅ All connections verified!")
-    print("="*60 + "\n")
-    return True
+            print(f"Error {symbol}: {e}")
 
 if __name__ == "__main__":
     print("15M Scalp Bot started...")
-    
-    if test_connections():
-        diagnose_market()
-        analyze_and_trade()
-    else:
-        print("\n❌ Fix connections first.")
-        exit(1)
+    analyze_and_trade()
