@@ -161,34 +161,31 @@ def send_crypto_signal(coin_name, direction, strategy, entry, leverage, tp1, tp2
     try:
         response = requests.post(url, json=payload)
         if response.json().get('ok'): 
-            print(f"Signal {signal_id} sent for {coin_name} via {strategy}")
+            print(f"✅ Signal {signal_id} sent for {coin_name} via {strategy}")
         else: 
-            print(f"ERROR for {coin_name}: {response.json().get('description')}")
+            print(f"❌ ERROR for {coin_name}: {response.json().get('description')}")
     except Exception as e: 
-        print(f"Network error: {e}")
+        print(f"❌ Network error: {e}")
 
-# ========== تشخيص ==========
+# ========== تشخيص محسّن ==========
 def diagnose_market():
-    """تشخيص حالة السوق"""
+    """تشخيص حالة السوق ببيانات كافية"""
     print("\n" + "="*60)
-    print("🔍 Market Diagnosis")
+    print("🔍 Market Diagnosis (Last 100 candles)")
     print("="*60 + "\n")
     
     exchange = ccxt.mexc()
-    
-    # فحص 5 عملات رئيسية
     test_symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "DOGE/USDT", "ADA/USDT"]
     
     for symbol in test_symbols:
         try:
-            ohlcv = exchange.fetch_ohlcv(symbol, TIMEFRAME, limit=5)
+            # limit=100 للحصول على بيانات صالحة
+            ohlcv = exchange.fetch_ohlcv(symbol, TIMEFRAME, limit=100)
             df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             
             # EMA
-            ema_9 = df['close'].ewm(span=9, adjust=False).mean().iloc[-1]
-            ema_21 = df['close'].ewm(span=21, adjust=False).mean().iloc[-1]
-            ema_9_prev = df['close'].ewm(span=9, adjust=False).mean().iloc[-2]
-            ema_21_prev = df['close'].ewm(span=21, adjust=False).mean().iloc[-2]
+            ema_9 = df['close'].ewm(span=9, adjust=False).mean()
+            ema_21 = df['close'].ewm(span=21, adjust=False).mean()
             
             # MACD
             macd_hist = ta.trend.macd_diff(df['close'])
@@ -196,14 +193,40 @@ def diagnose_market():
             # BB
             bb = ta.volatility.BollingerBands(close=df['close'], window=20, window_dev=2)
             
+            # RSI
+            rsi = ta.momentum.rsi(df['close'], window=14)
+            
+            # آخر قيم صالحة
+            last_ema9 = ema_9.iloc[-1]
+            last_ema21 = ema_21.iloc[-1]
+            prev_ema9 = ema_9.iloc[-2]
+            prev_ema21 = ema_21.iloc[-2]
+            
+            last_macd = macd_hist.iloc[-1]
+            prev_macd = macd_hist.iloc[-2]
+            
+            last_bb_upper = bb.bollinger_hband().iloc[-1]
+            last_bb_lower = bb.bollinger_lband().iloc[-1]
+            prev_bb_upper = bb.bollinger_hband().iloc[-2]
+            prev_bb_lower = bb.bollinger_lband().iloc[-2]
+            
+            last_rsi = rsi.iloc[-1]
+            last_price = df['close'].iloc[-1]
+            
+            # فحص الإشارات
+            ema_buy = (prev_ema9 < prev_ema21) and (last_ema9 > last_ema21)
+            ema_sell = (prev_ema9 > prev_ema21) and (last_ema9 < last_ema21)
+            macd_buy = (prev_macd < 0) and (last_macd > 0)
+            macd_sell = (prev_macd > 0) and (last_macd < 0)
+            bb_buy = (df['close'].iloc[-2] <= prev_bb_upper) and (last_price > last_bb_upper)
+            bb_sell = (df['close'].iloc[-2] >= prev_bb_lower) and (last_price < last_bb_lower)
+            
             print(f"📊 {symbol}:")
-            print(f"   Price: {df['close'].iloc[-1]:.4f}")
-            print(f"   EMA 9: {ema_9:.4f} | EMA 21: {ema_21:.4f}")
-            print(f"   EMA Cross: {ema_9_prev:.4f}/{ema_21_prev:.4f} → {ema_9:.4f}/{ema_21:.4f}")
-            print(f"   MACD Hist: {macd_hist.iloc[-2]:.6f} → {macd_hist.iloc[-1]:.6f}")
-            print(f"   BB Upper: {bb.bollinger_hband().iloc[-1]:.4f}")
-            print(f"   BB Lower: {bb.bollinger_lband().iloc[-1]:.4f}")
-            print(f"   RSI: {ta.momentum.rsi(df['close'], window=14).iloc[-1]:.1f}")
+            print(f"   Price: {last_price:.4f} | RSI: {last_rsi:.1f}")
+            print(f"   EMA 9: {last_ema9:.2f} | EMA 21: {last_ema21:.2f}")
+            print(f"   EMA Cross: {'✅ BUY' if ema_buy else '✅ SELL' if ema_sell else '❌ No'}")
+            print(f"   MACD: {last_macd:.6f} | {'✅ BUY' if macd_buy else '✅ SELL' if macd_sell else '❌ No'}")
+            print(f"   BB: Upper={last_bb_upper:.2f} Lower={last_bb_lower:.2f} | {'✅ BUY' if bb_buy else '✅ SELL' if bb_sell else '❌ No'}")
             print()
             
         except Exception as e:
@@ -214,8 +237,10 @@ def analyze_and_trade():
     exchange = ccxt.mexc()
     
     signals_found = 0
+    checked = 0
     
     for symbol in SYMBOLS:
+        checked += 1
         try:
             ohlcv = exchange.fetch_ohlcv(symbol, TIMEFRAME, limit=100)
             df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -249,7 +274,7 @@ def analyze_and_trade():
                 strategy_name = "EMA Cross" if ema_buy else ("MACD Cross" if macd_buy else "BB Breakout")
                 lev = "15" if ema_buy else ("25" if macd_buy else "20")
                 
-                print(f"✅ BUY on {symbol} via {strategy_name} ({lev}x)!")
+                print(f"✅ BUY on {symbol} via {strategy_name} ({lev}x})!")
                 entry = round(current_close, decimals)
                 summary = generate_summary("LONG", strategy_name, df)
                 
@@ -265,7 +290,7 @@ def analyze_and_trade():
                 strategy_name = "EMA Cross" if ema_sell else ("MACD Cross" if macd_sell else "BB Breakdown")
                 lev = "15" if ema_sell else ("25" if macd_sell else "20")
                 
-                print(f"✅ SELL on {symbol} via {strategy_name} ({lev}x)!")
+                print(f"✅ SELL on {symbol} via {strategy_name} ({lev}x})!")
                 entry = round(current_close, decimals)
                 summary = generate_summary("SHORT", strategy_name, df)
                 
@@ -275,16 +300,15 @@ def analyze_and_trade():
                     round(entry * 1.05, decimals), summary)
                 time.sleep(6)
                 signals_found += 1
-            else:
-                # طباعة حالة "لا إشارة" للتشخيص
-                pass
                 
         except Exception as e:
             print(f"❌ Error {symbol}: {e}")
     
-    print(f"\n📊 Total signals found: {signals_found}")
+    print(f"\n{'='*60}")
+    print(f"📊 Checked: {checked}/38 | Signals: {signals_found}")
     if signals_found == 0:
         print("⚠️ No signals found - market may be ranging or quiet")
+    print(f"{'='*60}\n")
 
 # ========== اختبار الاتصال ==========
 def test_connections():
@@ -341,9 +365,7 @@ if __name__ == "__main__":
     print("15M Scalp Bot started...")
     
     if test_connections():
-        # تشخيص السوق أولاً
         diagnose_market()
-        # ثم الفحص الكامل
         analyze_and_trade()
     else:
         print("\n❌ Fix connections first.")
