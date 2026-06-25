@@ -249,6 +249,72 @@ def analyze_and_trade():
         except Exception as e:
             print(f"Error {symbol}: {e}")
 
+# ========== اختبار الاتصال ==========
+def test_connections():
+    print("\n" + "="*60)
+    print("🔍 Testing Connections...")
+    print("="*60 + "\n")
+    
+    # 1. اختبار MEXC
+    print("1. Testing MEXC API...")
+    try:
+        exchange = ccxt.mexc()
+        ticker = exchange.fetch_ticker("BTC/USDT")
+        print(f"   ✅ MEXC Connected!")
+        print(f"   📊 BTC Price: {ticker['last']}")
+        print(f"   📈 24h Change: {ticker['percentage']}%")
+        print(f"   💰 24h Volume: {ticker['quoteVolume']:,.0f} USDT")
+    except Exception as e:
+        print(f"   ❌ MEXC Error: {e}")
+        return False
+    
+    # 2. اختبار Telegram
+    print("\n2. Testing Telegram Bot...")
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/getMe"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        if data.get("ok"):
+            bot_info = data["result"]
+            print(f"   ✅ Telegram Connected!")
+            print(f"   🤖 Bot Name: @{bot_info['username']}")
+            print(f"   📝 Bot ID: {bot_info['id']}")
+        else:
+            print(f"   ❌ Telegram Error: {data.get('description')}")
+            return False
+    except Exception as e:
+        print(f"   ❌ Telegram Error: {e}")
+        return False
+    
+    # 3. اختبار القناة
+    print("\n3. Testing Channel Access...")
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChat?chat_id={CHANNEL_ID}"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        if data.get("ok"):
+            chat_info = data["result"]
+            print(f"   ✅ Channel Accessible!")
+            print(f"   📢 Channel: {chat_info.get('title', 'Unknown')}")
+            print(f"   🆔 Channel ID: {chat_info['id']}")
+        else:
+            print(f"   ❌ Channel Error: {data.get('description')}")
+            return False
+    except Exception as e:
+        print(f"   ❌ Channel Error: {e}")
+        return False
+    
+    print("\n" + "="*60)
+    print("✅ All connections verified! Starting scan...")
+    print("="*60 + "\n")
+    return True
+
 if __name__ == "__main__":
     print("15M Scalp Bot started...")
-    analyze_and_trade()
+    
+    # اختبار الاتصالات أولاً
+    if test_connections():
+        analyze_and_trade()
+    else:
+        print("\n❌ Please fix connection issues before running the bot.")
+        exit(1)
