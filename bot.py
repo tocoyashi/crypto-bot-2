@@ -14,7 +14,7 @@ CHANNEL_ID = os.environ.get("CHANNEL_ID")
 
 TIMEFRAME = "15m"
 
-# ========== 38 عملة (بدون الـ 12 المحذوفة) ==========
+# ========== 38 عملة ==========
 SYMBOLS = [
     "BTC/USDT", "ADA/USDT", "DOGE/USDT", "TRX/USDT", "AVAX/USDT", 
     "LINK/USDT", "DOT/USDT", "POL/USDT", "SHIB/USDT", "LTC/USDT", 
@@ -39,22 +39,17 @@ def get_next_signal_id():
             current_id = int(file.read().strip())
     except (FileNotFoundError, ValueError):
         current_id = 0
-    
     next_id = current_id + 1
-    
     try:
         with open(filename, "w") as file:
             file.write(str(next_id))
     except Exception as e:
         print(f"Error saving signal ID: {e}")
-        
     return f"{next_id:03d}"
 
-# ========== تحليل ذكي بدون أرقام ==========
 def generate_summary(direction, strategy, df):
     rsi_val = round(ta.momentum.rsi(df['close'], window=14).iloc[-1], 1)
     
-    # الهيكل السعري
     if df['close'].iloc[-1] > df['close'].ewm(span=50, adjust=False).mean().iloc[-1]:
         structure_txt = random.choice([
             "The intraday chart maintains a bullish posture with price holding above dynamic support.",
@@ -68,7 +63,6 @@ def generate_summary(direction, strategy, df):
             "Price action on the fifteen-minute frame reflects steady bearish commitment."
         ])
 
-    # الحدث المُفَعِّل
     if "EMA" in strategy:
         if direction == "LONG":
             action_txt = random.choice([
@@ -95,7 +89,7 @@ def generate_summary(direction, strategy, df):
                 "A fresh bearish cross on the momentum gauge suggests accelerating downside.",
                 "Selling pressure intensified as the histogram flipped into negative territory."
             ])
-    else:  # BB Breakout
+    else:
         if direction == "LONG":
             action_txt = random.choice([
                 "An expansion beyond the upper volatility band signals a breakout impulse.",
@@ -109,7 +103,6 @@ def generate_summary(direction, strategy, df):
                 "The squeeze resolved to the downside with aggressive momentum."
             ])
 
-    # الزخم (RSI بدون ذكر الرقم مباشرة - وصف فقط)
     if direction == "LONG":
         if rsi_val < 70:
             rsi_txt = random.choice([
@@ -137,7 +130,6 @@ def generate_summary(direction, strategy, df):
                 "Sellers dominate with the momentum gauge deep in the lower extreme."
             ])
 
-    # مستويات المخاطر (بدون أرقام!)
     if direction == "LONG":
         levels_txt = random.choice([
             "Invalidation lies below the entry zone; target a quick sweep to the first objective and extension toward the final target.",
@@ -151,8 +143,7 @@ def generate_summary(direction, strategy, df):
             "Place defensive stops above the setup zone; anticipate swift execution toward the nearest target."
         ])
 
-    summary = f"📊 {structure_txt} {action_txt} {rsi_txt} {levels_txt}"
-    return summary
+    return f"📊 {structure_txt} {action_txt} {rsi_txt} {levels_txt}"
 
 def send_crypto_signal(coin_name, direction, strategy, entry, leverage, tp1, tp2, tp3, tp4, sl, summary_text):
     signal_id = get_next_signal_id()
@@ -163,7 +154,6 @@ def send_crypto_signal(coin_name, direction, strategy, entry, leverage, tp1, tp2
     zone_low = round(entry * 0.9985, get_decimals(entry))
     zone_high = round(entry * 1.0015, get_decimals(entry))
 
-    # Updated text with Bold HTML tags
     text = f"🔖 <b>Signal ID: {signal_id}</b>\n📩 #{clean_name} {TIMEFRAME.upper()} | {strategy}\n{trend_emoji} {direction_text} Entry Zone: {zone_low}-{zone_high}\n⚡ Leverage: {leverage}x\n\n🎯 Strategy Details:\nTarget 1: {tp1}\nTarget 2: {tp2}\nTarget 3: {tp3}\nTarget 4: {tp4}\n\n🔺 Stop-Loss: {sl}\n💡 After reaching the first target you can put the rest of the position to breakeven.\n\n<b>{summary_text}</b>"
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -177,9 +167,53 @@ def send_crypto_signal(coin_name, direction, strategy, entry, leverage, tp1, tp2
     except Exception as e: 
         print(f"Network error: {e}")
 
+# ========== تشخيص ==========
+def diagnose_market():
+    """تشخيص حالة السوق"""
+    print("\n" + "="*60)
+    print("🔍 Market Diagnosis")
+    print("="*60 + "\n")
+    
+    exchange = ccxt.mexc()
+    
+    # فحص 5 عملات رئيسية
+    test_symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "DOGE/USDT", "ADA/USDT"]
+    
+    for symbol in test_symbols:
+        try:
+            ohlcv = exchange.fetch_ohlcv(symbol, TIMEFRAME, limit=5)
+            df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            
+            # EMA
+            ema_9 = df['close'].ewm(span=9, adjust=False).mean().iloc[-1]
+            ema_21 = df['close'].ewm(span=21, adjust=False).mean().iloc[-1]
+            ema_9_prev = df['close'].ewm(span=9, adjust=False).mean().iloc[-2]
+            ema_21_prev = df['close'].ewm(span=21, adjust=False).mean().iloc[-2]
+            
+            # MACD
+            macd_hist = ta.trend.macd_diff(df['close'])
+            
+            # BB
+            bb = ta.volatility.BollingerBands(close=df['close'], window=20, window_dev=2)
+            
+            print(f"📊 {symbol}:")
+            print(f"   Price: {df['close'].iloc[-1]:.4f}")
+            print(f"   EMA 9: {ema_9:.4f} | EMA 21: {ema_21:.4f}")
+            print(f"   EMA Cross: {ema_9_prev:.4f}/{ema_21_prev:.4f} → {ema_9:.4f}/{ema_21:.4f}")
+            print(f"   MACD Hist: {macd_hist.iloc[-2]:.6f} → {macd_hist.iloc[-1]:.6f}")
+            print(f"   BB Upper: {bb.bollinger_hband().iloc[-1]:.4f}")
+            print(f"   BB Lower: {bb.bollinger_lband().iloc[-1]:.4f}")
+            print(f"   RSI: {ta.momentum.rsi(df['close'], window=14).iloc[-1]:.1f}")
+            print()
+            
+        except Exception as e:
+            print(f"❌ {symbol}: {e}\n")
+
 def analyze_and_trade():
     print("Starting 15M Scalp Scan with Dynamic Leverage & 3 Strategies...")
     exchange = ccxt.mexc()
+    
+    signals_found = 0
     
     for symbol in SYMBOLS:
         try:
@@ -215,39 +249,42 @@ def analyze_and_trade():
                 strategy_name = "EMA Cross" if ema_buy else ("MACD Cross" if macd_buy else "BB Breakout")
                 lev = "15" if ema_buy else ("25" if macd_buy else "20")
                 
-                print(f"BUY on {symbol} via {strategy_name} ({lev}x)!")
+                print(f"✅ BUY on {symbol} via {strategy_name} ({lev}x)!")
                 entry = round(current_close, decimals)
-                
-                # Generate summary for Long (بدون أرقام!)
                 summary = generate_summary("LONG", strategy_name, df)
                 
                 send_crypto_signal(symbol, "LONG", strategy_name, entry, lev, 
                     round(entry * 1.0075, decimals), round(entry * 1.017, decimals), 
                     round(entry * 1.032, decimals), round(entry * 1.058, decimals), 
                     round(entry * 0.95, decimals), summary)
-                time.sleep(6) # Increased to 6s for Cornix compatibility
+                time.sleep(6)
+                signals_found += 1
                 
             # ✨ SHORT Signals
             elif ema_sell or macd_sell or bb_sell:
                 strategy_name = "EMA Cross" if ema_sell else ("MACD Cross" if macd_sell else "BB Breakdown")
                 lev = "15" if ema_sell else ("25" if macd_sell else "20")
                 
-                print(f"SELL on {symbol} via {strategy_name} ({lev}x)!")
+                print(f"✅ SELL on {symbol} via {strategy_name} ({lev}x)!")
                 entry = round(current_close, decimals)
-                
-                # Generate summary for Short (بدون أرقام!)
                 summary = generate_summary("SHORT", strategy_name, df)
                 
                 send_crypto_signal(symbol, "SHORT", strategy_name, entry, lev, 
                     round(entry * 0.9925, decimals), round(entry * 0.983, decimals), 
                     round(entry * 0.968, decimals), round(entry * 0.942, decimals), 
                     round(entry * 1.05, decimals), summary)
-                time.sleep(6) # Increased to 6s for Cornix compatibility
+                time.sleep(6)
+                signals_found += 1
             else:
-                pass # No signal
+                # طباعة حالة "لا إشارة" للتشخيص
+                pass
                 
         except Exception as e:
-            print(f"Error {symbol}: {e}")
+            print(f"❌ Error {symbol}: {e}")
+    
+    print(f"\n📊 Total signals found: {signals_found}")
+    if signals_found == 0:
+        print("⚠️ No signals found - market may be ranging or quiet")
 
 # ========== اختبار الاتصال ==========
 def test_connections():
@@ -255,66 +292,59 @@ def test_connections():
     print("🔍 Testing Connections...")
     print("="*60 + "\n")
     
-    # 1. اختبار MEXC
     print("1. Testing MEXC API...")
     try:
         exchange = ccxt.mexc()
         ticker = exchange.fetch_ticker("BTC/USDT")
         print(f"   ✅ MEXC Connected!")
         print(f"   📊 BTC Price: {ticker['last']}")
-        print(f"   📈 24h Change: {ticker['percentage']}%")
-        print(f"   💰 24h Volume: {ticker['quoteVolume']:,.0f} USDT")
     except Exception as e:
         print(f"   ❌ MEXC Error: {e}")
         return False
     
-    # 2. اختبار Telegram
     print("\n2. Testing Telegram Bot...")
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getMe"
         response = requests.get(url, timeout=10)
         data = response.json()
         if data.get("ok"):
-            bot_info = data["result"]
             print(f"   ✅ Telegram Connected!")
-            print(f"   🤖 Bot Name: @{bot_info['username']}")
-            print(f"   📝 Bot ID: {bot_info['id']}")
+            print(f"   🤖 Bot: @{data['result']['username']}")
         else:
-            print(f"   ❌ Telegram Error: {data.get('description')}")
+            print(f"   ❌ Telegram Error")
             return False
     except Exception as e:
         print(f"   ❌ Telegram Error: {e}")
         return False
     
-    # 3. اختبار القناة
-    print("\n3. Testing Channel Access...")
+    print("\n3. Testing Channel...")
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChat?chat_id={CHANNEL_ID}"
         response = requests.get(url, timeout=10)
         data = response.json()
         if data.get("ok"):
-            chat_info = data["result"]
             print(f"   ✅ Channel Accessible!")
-            print(f"   📢 Channel: {chat_info.get('title', 'Unknown')}")
-            print(f"   🆔 Channel ID: {chat_info['id']}")
+            print(f"   📢 {data['result'].get('title', 'Unknown')}")
         else:
-            print(f"   ❌ Channel Error: {data.get('description')}")
+            print(f"   ❌ Channel Error")
             return False
     except Exception as e:
         print(f"   ❌ Channel Error: {e}")
         return False
     
     print("\n" + "="*60)
-    print("✅ All connections verified! Starting scan...")
+    print("✅ All connections verified!")
     print("="*60 + "\n")
     return True
 
 if __name__ == "__main__":
     print("15M Scalp Bot started...")
     
-    # اختبار الاتصالات أولاً
     if test_connections():
+        # تشخيص السوق أولاً
+        diagnose_market()
+        # ثم الفحص الكامل
         analyze_and_trade()
     else:
-        print("\n❌ Please fix connection issues before running the bot.")
+        print("\n❌ Fix connections first.")
         exit(1)
