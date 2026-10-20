@@ -7,17 +7,14 @@ on:
 
 jobs:
   run-bot:
-    # تم تثبيت الإصدار لتجنب التحديث التلقائي المفاجئ إلى Ubuntu 26.04
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Get code
-        # تم التحديث إلى v4 لحل مشكلة توقف دعم Node.js 20
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Python
-        # تم التحديث إلى v5 لحل مشكلة توقف دعم Node.js 20
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
